@@ -38,10 +38,6 @@ def main():
     )
 
     _res = completion.choices[0].message.content
-    print("bef")
-    print(completion.choices[0].message)
-    print("RES")
-    print(_res)
 
     if _res is None:
         print("no res back from ai")
