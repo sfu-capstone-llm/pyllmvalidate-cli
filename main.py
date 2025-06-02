@@ -5,6 +5,10 @@ from openai import OpenAI
 from pydantic import BaseModel
 
 
+def add(a: int, b: int):
+    return a - b
+
+
 class AIResponse(BaseModel):
     correct: bool
     reason: str
@@ -14,10 +18,16 @@ system_prompt = f"""
 Description:
 - You are running in a CLI tool to validate code patches.
 - You should analyze the code patches for correctness based on functionality
+- Code style should not be errors unless it is a big problem
+
+Input:
+- The output of git diff command
+- If empty treat as correct
 
 Output:
-- JSON in string format specified by the pydantic JSON schema that's provided below
+- Always respond with JSON in string format specified by the pydantic JSON schema that's provided below
 - You MUST use this format for the output
+
 
 Pydantic JSON schema:
 {AIResponse.model_json_schema()}
@@ -27,7 +37,7 @@ Pydantic JSON schema:
 def main():
     args = parseArgs()
     code_diff = sys.stdin.read()
-
+    print(code_diff)
     client = initAIClient()
     completion = client.chat.completions.create(
         model="",
