@@ -2,11 +2,7 @@ import argparse
 import sys
 
 from openai import OpenAI
-from pydantic import BaseModel
-
-
-def add(a: int, b: int):
-    return a - b
+from pydantic import BaseModel, ValidationError
 
 
 class AIResponse(BaseModel):
@@ -17,20 +13,25 @@ class AIResponse(BaseModel):
 system_prompt = f"""
 Description:
 - You are running in a CLI tool to validate code patches.
-- You should analyze the code patches for correctness based on functionality
-- Code style should not be errors unless it is a big problem
+- You should analyze the code patches for correctness
 
 Input:
 - The output of git diff command
 - If empty treat as correct
 
 Output:
-- Always respond with JSON in string format specified by the pydantic JSON schema that's provided below
+- Always respond with JSON in STRING format specified by the pydantic JSON schema that's provided below
+- Dot not include the markdown ```
 - You MUST use this format for the output
-
 
 Pydantic JSON schema:
 {AIResponse.model_json_schema()}
+
+Example:
+{{
+    "correct": false,
+    "reason": "The patch modifies the 'add' function to return `a * b` instead of `a - b`, which is likely incorrect because the function name suggests addition, not multiplication."
+}}
 """
 
 
@@ -48,18 +49,25 @@ def main():
     )
 
     _res = completion.choices[0].message.content
+    print(_res)
 
     if _res is None:
         print("no res back from ai")
-        return
+        return sys.exit(1)
 
     # Clean Markdown formatting if present
-    if _res.strip().startswith("```json"):
-        _res = _res.strip().removeprefix("```json").removesuffix("```").strip()
+    # if _res.strip().startswith("```json"):
+    #     _res = _res.strip().removeprefix("```json").removesuffix("```").strip()
 
-    res = AIResponse.model_validate_json(_res)
+    try:
+        res = AIResponse.model_validate_json(_res)
+    except ValidationError as e:
+        print("The LLM generated an incorrect output.")
+        print(e)
+        return sys.exit(1)
 
-    print(res)
+    print("Correct: ", res.correct)
+    print("Reason: ", res.reason)
 
 
 def parseArgs() -> argparse.Namespace:
