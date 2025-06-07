@@ -48,9 +48,6 @@ Input:
 - File information and git diff output
 - If no changes, treat as correct
 
-File Analysis Data:
-{diff_analysis}
-
 Output:
 - Always respond with JSON in STRING format specified by the pydantic JSON schema that's provided below
 - Dot not include the markdown ```
@@ -138,13 +135,6 @@ def print_diff_summary(diff_analysis: DiffAnalysis):
 def main():
 
     args = parseArgs()
-<<<<<<< Updated upstream
-=======
-<<<<<<< Updated upstream
-    code_diff = sys.stdin.read()
-    print(code_diff)
-=======
->>>>>>> Stashed changes
     diff_analysis = get_git_diff()
     
     print_diff_summary(diff_analysis)    # print(code_diff)
@@ -153,14 +143,10 @@ def main():
         diff_analysis = add_lint_context(diff_analysis)
         print(diff_analysis)
 
-<<<<<<< Updated upstream
-=======
     system_prompt = system_prompt_template.format(
         schema=AIResponse.model_json_schema()
     )
 
->>>>>>> Stashed changes
->>>>>>> Stashed changes
     client = initAIClient()
     completion = client.chat.completions.create(
         model="",
