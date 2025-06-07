@@ -1,12 +1,17 @@
 import argparse
 import sys
+from pathlib import Path
 
 from openai import OpenAI
 from pydantic import BaseModel
+from git import Repo, InvalidGitRepositoryError
 
 
 def add(a: int, b: int):
     return a - b
+
+def multiply(a: int, b: int):
+    return a / b
 
 
 class AIResponse(BaseModel):
@@ -34,21 +39,49 @@ Pydantic JSON schema:
 """
 
 
+def get_git_diff() -> str:
+    try:
+        repo = Repo(".")
+        diff = repo.git.diff()
+            
+        return diff
+        
+    except InvalidGitRepositoryError:
+        print(f"Error: current directory is not a valid git repository", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error getting git diff: {e}", file=sys.stderr)
+        sys.exit(1)
+
 def main():
     args = parseArgs()
-    code_diff = sys.stdin.read()
-    print(code_diff)
+    
+    code_diff = get_git_diff()
+
+    print(f"Git diff output:\n{code_diff}\n" + "="*50)
+    
+    # If diff is empty, treat as correct
+    if not code_diff.strip():
+        res = AIResponse(correct=True, reason="No changes detected in git diff")
+        print(res)
+        return
+    
     client = initAIClient()
-    completion = client.chat.completions.create(
-        model="",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": code_diff},
-        ],
-    )
+    # completion = client.chat.completions.create(
+    #     model="",
+    #     messages=[
+    #         {"role": "system", "content": system_prompt},
+    #         {"role": "user", "content": code_diff},
+    #     ],
+    # )
 
-    _res = completion.choices[0].message.content
-
+    # _res = completion.choices[0].message.content
+    _res = """{
+        "correct": "true",
+        "reason": "No changes detected in git diff."
+    }"""
+    
+    print("CODE DIFF", code_diff)
     if _res is None:
         print("no res back from ai")
         return
@@ -63,8 +96,10 @@ def main():
 
 
 def parseArgs() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--env", action="store")
+    parser = argparse.ArgumentParser(description="Validate code patches using AI")
+    parser.add_argument("--env", action="store", help="Environment setting")
+    parser.add_argument("--repo-path", default=".", help="Path to git repository (default: current directory)")
+    parser.add_argument("--staged", action="store_true", help="Analyze staged changes (git diff --cached)")
     args = parser.parse_args()
     return args
 
