@@ -1,8 +1,19 @@
 import argparse
+import shutil
+import subprocess
 import sys
+from typing import List
 
 from openai import OpenAI
 from pydantic import BaseModel, ValidationError
+
+
+def greatest_num(arr: List[int]):
+    max = -1
+    for num in arr:
+        if num > max:
+            max = num
+    return max
 
 
 class AIResponse(BaseModel):
@@ -14,6 +25,7 @@ system_prompt = f"""
 Description:
 - You are running in a CLI tool to validate code patches.
 - You should analyze the code patches for correctness
+- The names of the function should have less weight to the overal decision
 
 Input:
 - The output of git diff command
@@ -38,7 +50,12 @@ Example:
 def main():
     args = parseArgs()
     code_diff = sys.stdin.read()
-    print(code_diff)
+    # print(code_diff)
+
+    if args.lint_context:
+        code_diff = add_lint_context(code_diff)
+        print(code_diff)
+
     client = initAIClient()
     completion = client.chat.completions.create(
         model="",
@@ -70,9 +87,30 @@ def main():
     print("Reason: ", res.reason)
 
 
+def add_lint_context(system_prompt: str) -> str:
+    if not shutil.which("ruff"):
+        print("Error: ruff is not installed or not in PATH")
+        return sys.exit(1)
+
+    prompt = system_prompt + "\n\n" + "Ruff linting context:\n"
+
+    result = subprocess.run(
+        ["ruff", "check"],
+        capture_output=True,  # captures stdout and stderr
+        text=True,  # returns output as string (instead of bytes)
+    )
+
+    if result.returncode == 0:
+        prompt = prompt + result.stdout
+    else:
+        prompt = prompt + f"ruff check failed: {result.stdout}"
+    return prompt
+
+
 def parseArgs() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", action="store")
+    parser.add_argument("--lint-context", action="store_true")
     args = parser.parse_args()
     return args
 
