@@ -54,8 +54,6 @@ def get_git_diff() -> str:
         sys.exit(1)
 
 def main():
-    args = parseArgs()
-    
     code_diff = get_git_diff()
 
     print(f"Git diff output:\n{code_diff}\n" + "="*50)
@@ -98,8 +96,6 @@ def main():
 def parseArgs() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Validate code patches using AI")
     parser.add_argument("--env", action="store", help="Environment setting")
-    parser.add_argument("--repo-path", default=".", help="Path to git repository (default: current directory)")
-    parser.add_argument("--staged", action="store_true", help="Analyze staged changes (git diff --cached)")
     args = parser.parse_args()
     return args
 
