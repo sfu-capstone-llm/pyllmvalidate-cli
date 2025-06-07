@@ -1,15 +1,21 @@
 import argparse
+import shutil
+import subprocess
 import sys
-from pathlib import Path
 from typing import List
 
 from openai import OpenAI
 from pydantic import BaseModel
 from git import Repo, InvalidGitRepositoryError
+from typing import List
 
 
-def add(a: int, b: int):
-    return a - b
+def greatest_num(arr: List[int]):
+    max = -1
+    for num in arr:
+        if num > max:
+            max = num
+    return max
 
 def multiply(a: int, b: int):
     return a / b
@@ -35,8 +41,8 @@ class AIResponse(BaseModel):
 system_prompt_template = """
 Description:
 - You are running in a CLI tool to validate code patches.
-- You should analyze the code patches for correctness based on functionality
-- Code style should not be errors unless it is a big problem
+- You should analyze the code patches for correctness
+- The names of the function should have less weight to the overal decision
 
 Input:
 - File information and git diff output
@@ -46,11 +52,19 @@ File Analysis Data:
 {diff_analysis}
 
 Output:
-- Always respond with JSON in string format specified by the pydantic JSON schema that's provided below
+- Always respond with JSON in STRING format specified by the pydantic JSON schema that's provided below
+- Dot not include the markdown ```
 - You MUST use this format for the output
 
 Pydantic JSON schema:
 {schema}
+{AIResponse.model_json_schema()}
+
+Example:
+{{
+    "correct": false,
+    "reason": "The patch modifies the 'add' function to return `a * b` instead of `a - b`, which is likely incorrect because the function name suggests addition, not multiplication."
+}}
 """
 
 
@@ -122,52 +136,64 @@ def print_diff_summary(diff_analysis: DiffAnalysis):
 
 
 def main():
+
+    args = parseArgs()
     diff_analysis = get_git_diff()
     
-    print_diff_summary(diff_analysis)
-    
-    # If no files changed, treat as correct
-    if not diff_analysis.files:
-        res = AIResponse(correct=True, reason="No changes detected in git diff")
-        print(f"\nResult: {res}")
-        return
-    
-    # Prepare system prompt with diff analysis
-    system_prompt = system_prompt_template.format(
-        diff_analysis=diff_analysis.model_dump_json(indent=2),
-        schema=AIResponse.model_json_schema()
+    print_diff_summary(diff_analysis)    # print(code_diff)
+
+    if args.lint_context:
+        diff_analysis = add_lint_context(diff_analysis)
+        print(diff_analysis)
+
+    client = initAIClient()
+    completion = client.chat.completions.create(
+        model="",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": code_diff},
+        ],
     )
     
-    client = initAIClient()
-    # completion = client.chat.completions.create(
-    #     model="",
-    #     messages=[
-    #         {"role": "system", "content": system_prompt},
-    #         {"role": "user", "content": f"Analyze this code diff:\n\n{diff_analysis.git_diff_output}"},
-    #     ],
-    # )
+    _res = completion.choices[0].message.content
+    print(_res)
 
-    # _res = completion.choices[0].message.content
-    _res = """{
-        "correct": false,
-        "reason": "Found logical errors: add() returns a-b instead of a+b, multiply() returns a/b instead of a*b"
-    }"""
-    
     if _res is None:
         print("no res back from ai")
-        return
+        return sys.exit(1)
 
     # Clean Markdown formatting if present
-    if _res.strip().startswith("```json"):
-        _res = _res.strip().removeprefix("```json").removesuffix("```").strip()
+    # if _res.strip().startswith("```json"):
+    #     _res = _res.strip().removeprefix("```json").removesuffix("```").strip()
 
     res = AIResponse.model_validate_json(_res)
     print(f"\nAI Result: {res}")
 
 
+def add_lint_context(system_prompt: str) -> str:
+    if not shutil.which("ruff"):
+        print("Error: ruff is not installed or not in PATH")
+        return sys.exit(1)
+
+    prompt = system_prompt + "\n\n" + "Ruff linting context:\n"
+
+    result = subprocess.run(
+        ["ruff", "check"],
+        capture_output=True,  # captures stdout and stderr
+        text=True,  # returns output as string (instead of bytes)
+    )
+
+    if result.returncode == 0:
+        prompt = prompt + result.stdout
+    else:
+        prompt = prompt + f"ruff check failed: {result.stdout}"
+    return prompt
+
+
 def parseArgs() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Validate code patches using AI")
-    parser.add_argument("--env", action="store", help="Environment setting")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--env", action="store")
+    parser.add_argument("--lint-context", action="store_true")
     args = parser.parse_args()
     return args
 
