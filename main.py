@@ -37,19 +37,7 @@ Input:
 - File information and git diff output
 - If no changes, treat as correct
 
-Output:
-- Always respond with JSON in STRING format specified by the pydantic JSON schema that's provided below
-- Dot not include the markdown ```
-- You MUST use this format for the output
-
-Pydantic JSON schema:
-{schema}
-
-Example:
-{{
-    "correct": false,
-    "reason": "The patch modifies the 'add' function to return `a * b` instead of `a - b`, which is likely incorrect because the function name suggests addition, not multiplication."
-}}
+{output_format}
 """
 
 
@@ -129,7 +117,6 @@ def print_diff_summary(diff_analysis: DiffAnalysis):
     print(f"\nGit diff output:\n{diff_analysis.git_diff_output}")
     print("=" * 50)
 
-
 def main():
     args = parseArgs()
     diff_analysis = get_git_diff()
@@ -139,31 +126,36 @@ def main():
     if args.lint_context:
         diff_analysis.git_diff_output = add_lint_context(diff_analysis.git_diff_output)
         # print(diff_analysis)
-
-    system_prompt = system_prompt_template.format(schema=AIResponse.model_json_schema())
-
     client = initAIClient()
-    completion = client.chat.completions.create(
-        model="",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": diff_analysis.git_diff_output},
-        ],
-    )
 
-    _res = completion.choices[0].message.content
-    print(_res)
+    def get_ai_response(output_format, git_diff_output):
+        system_prompt = system_prompt_template.format(output_format=output_format)
+        completion = client.chat.completions.create(
+            model="",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": git_diff_output},
+            ],
+        )
+        return completion.choices[0].message.content
 
-    if _res is None:
-        print("no res back from ai")
-        return sys.exit(1)
+    # Get correctness
+    is_correct = get_ai_response("Only output 'true' or 'false' on correctness of the git diff.", diff_analysis.git_diff_output)
+    print(is_correct)
 
-    # Clean Markdown formatting if present
-    # if _res.strip().startswith("```json"):
-    #     _res = _res.strip().removeprefix("```json").removesuffix("```").strip()
+    if is_correct is None:
+        print("no is_correct back from ai")
+        sys.exit(1)
 
-    res = AIResponse.model_validate_json(_res)
-    print(f"\nAI Result: {res}")
+    # Get reason
+    reason = get_ai_response("States the reason on why the git diff is correct or not.", diff_analysis.git_diff_output)
+    
+    response = {
+        "is_correct": is_correct.strip().lower() == "true",
+        "reason": reason.strip()
+    }
+
+    print(f"\nAI Result: {response}")
 
 
 def add_lint_context(system_prompt: str) -> str:
