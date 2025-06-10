@@ -4,21 +4,9 @@ import subprocess
 import sys
 from typing import List
 
+from git import InvalidGitRepositoryError, Repo
 from openai import OpenAI
 from pydantic import BaseModel
-from git import Repo, InvalidGitRepositoryError
-from typing import List
-
-
-def greatest_num(arr: List[int]):
-    max = -1
-    for num in arr:
-        if num > max:
-            max = num
-    return max
-
-def multiply(a: int, b: int):
-    return a / b
 
 
 class FileInfo(BaseModel):
@@ -27,6 +15,7 @@ class FileInfo(BaseModel):
     insertions: int
     deletions: int
     content_before: str | None = None
+
 
 class DiffAnalysis(BaseModel):
     files: List[FileInfo]
@@ -55,7 +44,6 @@ Output:
 
 Pydantic JSON schema:
 {schema}
-{AIResponse.model_json_schema()}
 
 Example:
 {{
@@ -69,40 +57,48 @@ def analyze_diff_files(repo: Repo) -> DiffAnalysis:
     """Get file information for all files in the diff."""
     diffs = repo.index.diff(None)
     diff_output = repo.git.diff()
-    
+
     files_info = []
-    
+
     for diff_item in diffs:
         file_path = diff_item.a_path or diff_item.b_path
-        
+        assert file_path is not None
+
         # Get insertion/deletion counts
         insertions = deletions = 0
         try:
-            diff_stats = repo.git.diff('--numstat', file_path).strip()
-            if diff_stats and not diff_stats.startswith('-'):
-                parts = diff_stats.split('\t')
+            diff_stats = repo.git.diff("--numstat", file_path).strip()
+            if diff_stats and not diff_stats.startswith("-"):
+                parts = diff_stats.split("\t")
                 if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
                     insertions = int(parts[0])
                     deletions = int(parts[1])
         except Exception:
             pass
-        
+
         content_before = None
-        if diff_item.change_type == 'M': # only show content_before for modified files
+        if diff_item.change_type == "M":  # only show content_before for modified files
             try:
-                content_before = repo.git.show(f'HEAD:{file_path}')
+                content_before = repo.git.show(f"HEAD:{file_path}")
             except Exception:
                 if diff_item.a_blob:
-                    content_before = diff_item.a_blob.data_stream.read().decode('utf-8', errors='replace')
+                    content_before = diff_item.a_blob.data_stream.read().decode(
+                        "utf-8", errors="replace"
+                    )
 
-        files_info.append(FileInfo(
-            path=file_path,
-            status=diff_item.change_type,
-            insertions=insertions,
-            deletions=deletions,
-            content_before=content_before,
-        ))
-    
+        if diff_item.change_type is None:
+            continue
+
+        files_info.append(
+            FileInfo(
+                path=file_path,
+                status=diff_item.change_type,
+                insertions=insertions,
+                deletions=deletions,
+                content_before=content_before,
+            )
+        )
+
     return DiffAnalysis(files=files_info, git_diff_output=diff_output)
 
 
@@ -124,28 +120,27 @@ def get_git_diff() -> DiffAnalysis:
 def print_diff_summary(diff_analysis: DiffAnalysis):
     """Print diff summary."""
     print(f"\nFiles changed: {len(diff_analysis.files)}")
-    
+
     for file_info in diff_analysis.files:
-        print(f"  {file_info.path} ({file_info.status}) +{file_info.insertions}/-{file_info.deletions}")
-    
+        print(
+            f"  {file_info.path} ({file_info.status}) +{file_info.insertions}/-{file_info.deletions}"
+        )
+
     print(f"\nGit diff output:\n{diff_analysis.git_diff_output}")
-    print("="*50)
+    print("=" * 50)
 
 
 def main():
-
     args = parseArgs()
     diff_analysis = get_git_diff()
-    
-    print_diff_summary(diff_analysis)    # print(code_diff)
+
+    print_diff_summary(diff_analysis)  # print(code_diff)
 
     if args.lint_context:
-        diff_analysis = add_lint_context(diff_analysis)
-        print(diff_analysis)
+        diff_analysis.git_diff_output = add_lint_context(diff_analysis.git_diff_output)
+        # print(diff_analysis)
 
-    system_prompt = system_prompt_template.format(
-        schema=AIResponse.model_json_schema()
-    )
+    system_prompt = system_prompt_template.format(schema=AIResponse.model_json_schema())
 
     client = initAIClient()
     completion = client.chat.completions.create(
@@ -155,7 +150,7 @@ def main():
             {"role": "user", "content": diff_analysis.git_diff_output},
         ],
     )
-    
+
     _res = completion.choices[0].message.content
     print(_res)
 
