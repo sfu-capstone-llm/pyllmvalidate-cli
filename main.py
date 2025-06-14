@@ -1,12 +1,18 @@
-import argparse
 import shutil
+import os
 import subprocess
 import sys
+import argparse
 from typing import List
 
 from git import InvalidGitRepositoryError, Repo
 from openai import OpenAI
 from pydantic import BaseModel
+
+from bar.baz import baz
+from callgraph import copyIntoTempDir, install, instrument, execute
+
+baz()
 
 
 class FileInfo(BaseModel):
@@ -141,6 +147,12 @@ def main():
         # print(diff_analysis)
 
     system_prompt = system_prompt_template.format(schema=AIResponse.model_json_schema())
+
+    # copyIntoTempDir("./temp")
+    os.chdir("./temp")
+    install()
+    instrument()
+    execute()
 
     client = initAIClient()
     completion = client.chat.completions.create(
