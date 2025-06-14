@@ -40,6 +40,9 @@ Input:
 {output_format}
 """
 
+def add(a, b):
+    return a + b
+
 
 def analyze_diff_files(repo: Repo) -> DiffAnalysis:
     """Get file information for all files in the diff."""
@@ -149,7 +152,7 @@ def main():
 
     # Get reason
     reason = get_ai_response(f"You stated that this git diff is {is_correct}. Tell us the reason why right away.", diff_analysis)
-    
+
     response = {
         "is_correct": is_correct.strip().lower() == "true",
         "reason": reason.strip()
