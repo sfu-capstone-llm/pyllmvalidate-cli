@@ -128,19 +128,19 @@ def main():
         # print(diff_analysis)
     client = initAIClient()
 
-    def get_ai_response(output_format, git_diff_output):
+    def get_ai_response(output_format, diff_analysis: DiffAnalysis) -> str:
         system_prompt = system_prompt_template.format(output_format=output_format)
         completion = client.chat.completions.create(
             model="",
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": git_diff_output},
+                {"role": "user", "content": diff_analysis.model_dump_json()},
             ],
         )
         return completion.choices[0].message.content
 
     # Get correctness
-    is_correct = get_ai_response("Only output 'true' or 'false' on correctness of the git diff.", diff_analysis.git_diff_output)
+    is_correct = get_ai_response("Only output 'true' or 'false' on correctness of the git diff.", diff_analysis)
     print(is_correct)
 
     if is_correct is None:
@@ -148,7 +148,7 @@ def main():
         sys.exit(1)
 
     # Get reason
-    reason = get_ai_response("States the reason on why the git diff is correct or not.", diff_analysis.git_diff_output)
+    reason = get_ai_response(f"You stated that this git diff is {is_correct}. Tell us the reason why right away.", diff_analysis)
     
     response = {
         "is_correct": is_correct.strip().lower() == "true",
