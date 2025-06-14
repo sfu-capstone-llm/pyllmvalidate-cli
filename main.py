@@ -40,10 +40,6 @@ Input:
 {output_format}
 """
 
-def add(a, b):
-    return a + b
-
-
 def analyze_diff_files(repo: Repo) -> DiffAnalysis:
     """Get file information for all files in the diff."""
     diffs = repo.index.diff(None)
