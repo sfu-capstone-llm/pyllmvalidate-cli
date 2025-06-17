@@ -8,7 +8,7 @@ from git import InvalidGitRepositoryError, Repo
 from openai import OpenAI
 from pydantic import BaseModel
 
-from callgraph import build_call_graph, get_all_function_names_from_project
+from callgraph import build_call_graph
 
 
 class FileInfo(BaseModel):
@@ -39,19 +39,7 @@ Input:
 - File information and git diff output
 - If no changes, treat as correct
 
-Output:
-- Always respond with JSON in STRING format specified by the pydantic JSON schema that's provided below
-- Dot not include the markdown ```
-- You MUST use this format for the output
-
-Pydantic JSON schema:
-{schema}
-
-Example:
-{{
-    "correct": false,
-    "reason": "The patch modifies the 'add' function to return `a * b` instead of `a - b`, which is likely incorrect because the function name suggests addition, not multiplication."
-}}
+{output_format}
 """
 
 
@@ -136,44 +124,51 @@ def main():
     args = parseArgs()
     diff_analysis = get_git_diff()
 
-    print_diff_summary(diff_analysis)  # print(code_diff)
-
     if args.lint_context:
         diff_analysis.git_diff_output = add_lint_context(diff_analysis.git_diff_output)
-        # print(diff_analysis)
 
     if args.entry:
-        call_graph_str = build_call_graph(args.entry)
-        print("=== Call graph ===")
-        print(call_graph_str)
-        print(get_all_function_names_from_project())
+        diff_analysis.git_diff_output = add_call_graph_context(
+            args.entry, diff_analysis.git_diff_output
+        )
 
-    system_prompt = system_prompt_template.format(schema=AIResponse.model_json_schema())
-
-    # copyIntoTempDir("./temp")
+    print_diff_summary(diff_analysis)  # print(code_diff)
 
     client = initAIClient()
-    completion = client.chat.completions.create(
-        model="",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": diff_analysis.git_diff_output},
-        ],
+
+    def get_ai_response(output_format, diff_analysis: DiffAnalysis) -> str:
+        system_prompt = system_prompt_template.format(output_format=output_format)
+        completion = client.chat.completions.create(
+            model="",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": diff_analysis.model_dump_json()},
+            ],
+        )
+        return completion.choices[0].message.content
+
+    # Get correctness
+    is_correct = get_ai_response(
+        "Only output 'true' or 'false' on correctness of the git diff.", diff_analysis
+    )
+    print(is_correct)
+
+    if is_correct is None:
+        print("no is_correct back from ai")
+        sys.exit(1)
+
+    # Get reason
+    reason = get_ai_response(
+        f"You stated that this git diff is {is_correct}. Tell us the reason why right away.",
+        diff_analysis,
     )
 
-    _res = completion.choices[0].message.content
-    print(_res)
+    response = {
+        "is_correct": is_correct.strip().lower() == "true",
+        "reason": reason.strip(),
+    }
 
-    if _res is None:
-        print("no res back from ai")
-        return sys.exit(1)
-
-    # Clean Markdown formatting if present
-    # if _res.strip().startswith("```json"):
-    #     _res = _res.strip().removeprefix("```json").removesuffix("```").strip()
-
-    res = AIResponse.model_validate_json(_res)
-    print(f"\nAI Result: {res}")
+    print(f"\nAI Result: {response}")
 
 
 def add_lint_context(system_prompt: str) -> str:
@@ -194,6 +189,12 @@ def add_lint_context(system_prompt: str) -> str:
     else:
         prompt = prompt + f"ruff check failed: {result.stdout}"
     return prompt
+
+
+def add_call_graph_context(entry_file: str, system_prompt: str) -> str:
+    return (
+        system_prompt + "\n\n" + "Call graph context:\n" + build_call_graph(entry_file)
+    )
 
 
 def parseArgs() -> argparse.Namespace:

@@ -1,6 +1,6 @@
 import random
 import os
-from examples.multiple_files_libs.calcualator import baz
+from examples.multiple_files_libs.baz import baz
 from git import Repo
 
 
