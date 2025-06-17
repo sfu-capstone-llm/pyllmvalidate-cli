@@ -1,100 +1,83 @@
-import shutil
 import os
-import subprocess
+import runpy
 import sys
-
-files = ["./main.py", "./bar/baz.py"]
-
-
-def copyIntoTempDir(temp_dir: str):
-    os.makedirs(temp_dir, exist_ok=True)
-
-    root_dir = os.getcwd()
-
-    for item in os.listdir(root_dir):
-        source = os.path.join(root_dir, item)
-        destination = os.path.join(temp_dir, item)
-        print(source, destination)
-        if (
-            source == temp_dir
-            # or item.startswith(".git")
-            or item.startswith("__pycache__")
-            or item.startswith(".venv")
-        ):
-            continue
-        print(source)
-        if os.path.isdir(source):
-            shutil.copytree(
-                source,
-                destination,
-                dirs_exist_ok=True,
-                copy_function=shutil.copy2,
-                symlinks=True,
-            )
-        else:
-            shutil.copy2(source, destination)
+from collections import defaultdict
+import ast
 
 
-def install():
-    print("Installing dependencies")
-    result = subprocess.run(["uv", "sync"])
-    if result.returncode != 0:
-        print("Error: unable to install dependencies")
-        return sys.exit(1)
+def build_call_graph(entry: str):
+    call_graph = defaultdict(set)
+    call_stack = []
+
+    project_functions = set(get_all_function_names_from_project())
+
+    def is_project_function(func_name):
+        return func_name in project_functions
+
+    def tracefunc(frame, event, arg):
+        if event == "call":
+            code = frame.f_code
+            func_name = code.co_name
+            module = frame.f_globals.get("__name__", "")
+
+            # Get the actual module name from the entry point file
+            if module == "__main__":
+                module = os.path.splitext(os.path.basename(entry))[0]
+
+            full_name = f"{module}.{func_name}"
+
+            if call_stack:
+                caller = call_stack[-1]
+                if is_project_function(caller):
+                    call_graph[caller].add(full_name)
+
+            call_stack.append(full_name)
+
+        elif event == "return" and call_stack:
+            call_stack.pop()
+
+        return tracefunc
+
+    sys.settrace(tracefunc)
+    runpy.run_path(entry, run_name="__main__")
+    sys.settrace(None)
+
+    call_graph_str = ""
+    for caller, callees in call_graph.items():
+        for callee in callees:
+            call_graph_str = f"{call_graph_str}\n{caller}->{callee}"
+
+    return call_graph_str
 
 
-def instrument():
-    print("Instrumenting files")
-    print("Instrumenting files with dynapyt")
-    result = subprocess.run(
-        [
-            ".venv/bin/python",
-            "-m",
-            "dynapyt.instrument.instrument",
-            "--files",
-            *files,
-            "--analysis",
-            "callgraph",
-        ],
-        capture_output=True,
-        text=True,
-    )
+def get_all_function_names_from_project(project_dir="."):
+    defined_funcs = set()
 
-    if result.returncode != 0:
-        print("Error: unable to instrument files with dynapyt")
-        print(result.stdout)
-        print(result.stderr)
-        return sys.exit(1)
+    for dirpath, dirnames, filenames in os.walk(project_dir):
+        # Skip unwanted folders
+        dirnames[:] = [
+            d
+            for d in dirnames
+            if not d.startswith(".")
+            and d not in ("__pycache__", "venv", ".venv", "env")
+        ]
 
-    print(result.stdout)
+        for filename in filenames:
+            if filename.endswith(".py"):
+                path = os.path.join(dirpath, filename)
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        tree = ast.parse(f.read(), filename=path)
+                except Exception as e:
+                    print(f"Skipping {path}: {e}")
+                    continue
 
+                # Get module name from file path
+                rel_path = os.path.relpath(path, project_dir)
+                module_name = os.path.splitext(rel_path)[0].replace(os.sep, ".")
 
-def execute():
-    print("Executing files with dynapyt")
-    result = subprocess.run(
-        [
-            ".venv/bin/python",
-            "-m",
-            "dynapyt.run_analysis",
-            "--entry",
-            "main.py",
-            "--analysis",
-            "callgraph",
-        ],
-        capture_output=True,
-        text=True,
-    )
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.FunctionDef):
+                        defined_funcs.add(f"{module_name}.{node.name}")
 
-    if result.returncode != 0:
-        print("Error: unable to execute files with dynapyt")
-        print("=" * 50)
-        print(result.stdout)
-        print("=" * 50)
-        print(result.stderr)
-        return sys.exit(1)
-
-    print(result.stdout)
-
-
-def get_callgraph(temp_dir: str):
-    pass
+    return defined_funcs

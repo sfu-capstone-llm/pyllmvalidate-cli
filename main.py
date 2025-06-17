@@ -1,18 +1,14 @@
+import argparse
 import shutil
-import os
 import subprocess
 import sys
-import argparse
 from typing import List
 
 from git import InvalidGitRepositoryError, Repo
 from openai import OpenAI
 from pydantic import BaseModel
 
-from bar.baz import baz
-from callgraph import copyIntoTempDir, install, instrument, execute
-
-baz()
+from callgraph import build_call_graph, get_all_function_names_from_project
 
 
 class FileInfo(BaseModel):
@@ -146,13 +142,15 @@ def main():
         diff_analysis.git_diff_output = add_lint_context(diff_analysis.git_diff_output)
         # print(diff_analysis)
 
+    if args.entry:
+        call_graph_str = build_call_graph(args.entry)
+        print("=== Call graph ===")
+        print(call_graph_str)
+        print(get_all_function_names_from_project())
+
     system_prompt = system_prompt_template.format(schema=AIResponse.model_json_schema())
 
     # copyIntoTempDir("./temp")
-    os.chdir("./temp")
-    install()
-    instrument()
-    execute()
 
     client = initAIClient()
     completion = client.chat.completions.create(
@@ -202,6 +200,9 @@ def parseArgs() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", action="store")
     parser.add_argument("--lint-context", action="store_true")
+    parser.add_argument(
+        "--entry", action="store", help="The entry point of the program"
+    )
     args = parser.parse_args()
     return args
 
