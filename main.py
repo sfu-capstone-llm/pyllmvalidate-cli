@@ -8,6 +8,8 @@ from git import InvalidGitRepositoryError, Repo
 from openai import OpenAI
 from pydantic import BaseModel
 
+from callgraph import build_call_graph
+
 
 class FileInfo(BaseModel):
     path: str
@@ -39,6 +41,7 @@ Input:
 
 {output_format}
 """
+
 
 def analyze_diff_files(repo: Repo) -> DiffAnalysis:
     """Get file information for all files in the diff."""
@@ -116,15 +119,21 @@ def print_diff_summary(diff_analysis: DiffAnalysis):
     print(f"\nGit diff output:\n{diff_analysis.git_diff_output}")
     print("=" * 50)
 
+
 def main():
     args = parseArgs()
     diff_analysis = get_git_diff()
 
-    print_diff_summary(diff_analysis)  # print(code_diff)
-
     if args.lint_context:
         diff_analysis.git_diff_output = add_lint_context(diff_analysis.git_diff_output)
-        # print(diff_analysis)
+
+    if args.entry:
+        diff_analysis.git_diff_output = add_call_graph_context(
+            args.entry, diff_analysis.git_diff_output
+        )
+
+    print_diff_summary(diff_analysis)  # print(code_diff)
+
     client = initAIClient()
 
     def get_ai_response(output_format, diff_analysis: DiffAnalysis) -> str:
@@ -139,7 +148,9 @@ def main():
         return completion.choices[0].message.content
 
     # Get correctness
-    is_correct = get_ai_response("Only output 'true' or 'false' on correctness of the git diff.", diff_analysis)
+    is_correct = get_ai_response(
+        "Only output 'true' or 'false' on correctness of the git diff.", diff_analysis
+    )
     print(is_correct)
 
     if is_correct is None:
@@ -147,11 +158,14 @@ def main():
         sys.exit(1)
 
     # Get reason
-    reason = get_ai_response(f"You stated that this git diff is {is_correct}. Tell us the reason why right away.", diff_analysis)
+    reason = get_ai_response(
+        f"You stated that this git diff is {is_correct}. Tell us the reason why right away.",
+        diff_analysis,
+    )
 
     response = {
         "is_correct": is_correct.strip().lower() == "true",
-        "reason": reason.strip()
+        "reason": reason.strip(),
     }
 
     print(f"\nAI Result: {response}")
@@ -177,10 +191,19 @@ def add_lint_context(system_prompt: str) -> str:
     return prompt
 
 
+def add_call_graph_context(entry_file: str, system_prompt: str) -> str:
+    return (
+        system_prompt + "\n\n" + "Call graph context:\n" + build_call_graph(entry_file)
+    )
+
+
 def parseArgs() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", action="store")
     parser.add_argument("--lint-context", action="store_true")
+    parser.add_argument(
+        "--entry", action="store", help="The entry point of the program"
+    )
     args = parser.parse_args()
     return args
 
