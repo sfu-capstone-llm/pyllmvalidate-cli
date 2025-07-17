@@ -1,4 +1,5 @@
 import argparse
+import json
 import shutil
 import subprocess
 import sys
@@ -7,6 +8,7 @@ from typing import List
 from git import InvalidGitRepositoryError, Repo
 from openai import OpenAI
 from pydantic import BaseModel
+from core import prompt_ai
 
 from callgraph import build_call_graph
 
@@ -122,8 +124,17 @@ def print_diff_summary(diff_analysis: DiffAnalysis):
 
 def main():
     args = parseArgs()
-    diff_analysis = get_git_diff()
 
+    ctx = sys.stdin.read()
+    if len(ctx) > 0:
+        res = prompt_ai(ctx)
+        print(json.dumps({"is_correct": res["is_correct"], "reason": res["reason"]}))
+        if not res["is_correct"]:
+            sys.exit(1)
+        return
+
+    return
+    diff_analysis = get_git_diff()
     if args.lint_context:
         diff_analysis.git_diff_output = add_lint_context(diff_analysis.git_diff_output)
 

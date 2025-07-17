@@ -1,15 +1,16 @@
+import ast
 import os
 import runpy
 import sys
 from collections import defaultdict
-import ast
+from typing import List
 
 
-def build_call_graph(entry: str):
+def build_call_graph(entry: str, project_dir: str, exlude_list: List[str]):
     call_graph = defaultdict(set)
     call_stack = []
 
-    project_functions = set(get_all_function_names_from_project())
+    project_functions = set(get_all_function_names_from_project(project_dir))
 
     def is_project_function(func_name):
         return func_name in project_functions
@@ -20,11 +21,15 @@ def build_call_graph(entry: str):
             func_name = code.co_name
             module = frame.f_globals.get("__name__", "")
 
-            # Get the actual module name from the entry point file
+            # Get the actual module name from the entry point
             if module == "__main__":
-                module = os.path.splitext(os.path.basename(entry))[0]
+                module = entry
 
             full_name = f"{module}.{func_name}"
+
+            for item in exlude_list:
+                if full_name.startswith(item):
+                    return tracefunc
 
             if call_stack:
                 caller = call_stack[-1]
@@ -39,8 +44,13 @@ def build_call_graph(entry: str):
         return tracefunc
 
     sys.settrace(tracefunc)
-    runpy.run_path(entry, run_name="__main__")
-    sys.settrace(None)
+    try:
+        runpy.run_module(entry, run_name="__main__")
+    except SystemExit:
+        # unittest calls sys.exit(), catch it to continue execution
+        pass
+    finally:
+        sys.settrace(None)
 
     call_graph_str = ""
     for caller, callees in call_graph.items():
@@ -68,8 +78,8 @@ def get_all_function_names_from_project(project_dir="."):
                 try:
                     with open(path, "r", encoding="utf-8") as f:
                         tree = ast.parse(f.read(), filename=path)
-                except Exception as e:
-                    print(f"Skipping {path}: {e}")
+                # Skip python 2 files
+                except Exception:
                     continue
 
                 # Get module name from file path
