@@ -42,7 +42,7 @@ def get_ai_response(output_prompt: str, ctx: str):
 # Identity
 
 You are trying to validate if a code diff fixes the bug. You will be provided a the bug description
-which includes the PR and related issues from github, code diff, method trace, and full file context.
+which includes the PR and related issues from github, code diff, method trace, and full file context with the code diff applied.
 Use the bug description (PR and Issues) as the requirements for the fix.
 
 # Instruction
