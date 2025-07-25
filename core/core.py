@@ -9,10 +9,10 @@ load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
+
 class PromptAIRes(TypedDict):
     is_correct: bool
     reason: str
-
 
 
 def prompt_ai(ctx: str) -> PromptAIRes:
@@ -49,7 +49,7 @@ Use the bug description (PR and Issues) as the requirements for the fix.
 
 * The bug is specified in the # Description section with links to the GitHub PR and Issues
 * The description section should be the source of truth and provide the requirements for the fix
-* Use the description, code diff, method trace, and files sections which are separated by markdown headers.
+* Use the description, code diff, method trace, code coverage, and files sections which are separated by markdown headers.
 * Determine determine if the code diff correctly or incorrectly fixes the bug
 * {output_format}
     """
