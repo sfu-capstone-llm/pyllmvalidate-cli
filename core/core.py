@@ -50,7 +50,8 @@ Use the bug description (PR and Issues) as the requirements for the fix.
 * The bug is specified in the # Description section with links to the GitHub PR and Issues
 * The description section should be the source of truth and provide the requirements for the fix
 * Use the description, code diff, method trace, code coverage, and files sections which are separated by markdown headers.
-* Determine determine if the code diff correctly or incorrectly fixes the bug
+* The files are the new files with the patch applied to the old file
+* Determine if the code diff correctly or incorrectly fixes the bug
 * {output_format}
     """
     system_promp = system_prompt_template.format(output_format=output_prompt)
