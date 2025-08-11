@@ -57,7 +57,7 @@ Use the bug description (PR and Issues) as the requirements for the fix.
     client = initAIClient()
     try:
         completion = client.chat.completion.create(
-            model="gpt-5-2025-08-07",
+            model="claude-sonnet-4-20250514",
             messages=[
                 {"role": "system", "content": system_promp},
                 {"role": "user", "content": ctx},
@@ -71,4 +71,7 @@ Use the bug description (PR and Issues) as the requirements for the fix.
 
 
 def initAIClient() -> OpenAI:
-    return OpenAI(api_key=OPENAI_API_KEY)
+    return OpenAI(
+        api_key="ANTHROPIC_API_KEY",  # Your Anthropic API key
+        base_url="https://api.anthropic.com/v1/",  # Anthropic's API endpoint)
+    )
