@@ -56,7 +56,7 @@ Use the bug description (PR and Issues) as the requirements for the fix.
     system_promp = system_prompt_template.format(output_format=output_prompt)
     client = initAIClient()
     try:
-        completion = client.chat.completion.create(
+        completion = client.chat.completions.create(
             model="claude-sonnet-4-20250514",
             messages=[
                 {"role": "system", "content": system_promp},
