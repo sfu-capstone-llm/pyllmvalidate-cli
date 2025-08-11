@@ -56,10 +56,10 @@ Use the bug description (PR and Issues) as the requirements for the fix.
     system_promp = system_prompt_template.format(output_format=output_prompt)
     client = initAIClient()
     try:
-        completion = client.responses.create(
+        completion = client.chat.completion.create(
             model="gpt-5-2025-08-07",
-            input=[
-                {"role": "developer", "content": system_promp},
+            messages=[
+                {"role": "system", "content": system_promp},
                 {"role": "user", "content": ctx},
             ],
             temperature=0.3,
@@ -67,7 +67,7 @@ Use the bug description (PR and Issues) as the requirements for the fix.
     except Exception as e:
         print(e)
         sys.exit(2)
-    return completion.output_text
+    return completion.choices[0].message.content
 
 
 def initAIClient() -> OpenAI:
