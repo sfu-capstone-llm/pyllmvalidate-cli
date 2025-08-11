@@ -41,15 +41,15 @@ def get_ai_response(output_prompt: str, ctx: str):
     system_prompt_template = """
 # Identity
 
-You are trying to validate if a code diff fixes the bug. You will be provided a the bug description
-which includes the PR and related issues from Github, code diff, method trace, and full file context with the code diff applied.
+You are trying to validate if a code diff fixes the bug. You will be provided the bug description
+which includes the PR and related issues from Github and code diff
 Use the bug description (PR and Issues) as the requirements for the fix.
 
 # Instruction
 
 * The bug is specified in the # Description section with links to the GitHub PR and Issues
 * The description section should be the source of truth and provide the requirements for the fix
-* Use the description, code diff, method trace, code coverage, and files sections which are separated by markdown headers to determine if the fix is correct.
+* Use the description and code diff separated by markdown headers
 * Determine if the code diff correctly or incorrectly fixes the bug
 * {output_format}
     """
@@ -57,7 +57,7 @@ Use the bug description (PR and Issues) as the requirements for the fix.
     client = initAIClient()
     try:
         completion = client.responses.create(
-            model="gpt-4.1-nano-2025-04-14",
+            model="gpt-5-2025-08-07",
             input=[
                 {"role": "developer", "content": system_promp},
                 {"role": "user", "content": ctx},
