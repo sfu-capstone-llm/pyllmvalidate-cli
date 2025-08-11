@@ -42,15 +42,14 @@ def get_ai_response(output_prompt: str, ctx: str):
 # Identity
 
 You are trying to validate if a code diff fixes the bug. You will be provided a the bug description
-which includes the PR and related issues from github, code diff, method trace, and full file context with the code diff applied.
+which includes the PR and related issues from Github, code diff, method trace, and full file context with the code diff applied.
 Use the bug description (PR and Issues) as the requirements for the fix.
 
 # Instruction
 
 * The bug is specified in the # Description section with links to the GitHub PR and Issues
 * The description section should be the source of truth and provide the requirements for the fix
-* Use the description, code diff, method trace, code coverage, and files sections which are separated by markdown headers.
-* The files are the new files with the patch applied to the old file
+* Use the description, code diff, method trace, code coverage, and files sections which are separated by markdown headers to determine if the fix is correct.
 * Determine if the code diff correctly or incorrectly fixes the bug
 * {output_format}
     """
