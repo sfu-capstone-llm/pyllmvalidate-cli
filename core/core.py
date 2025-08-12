@@ -7,7 +7,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+# OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+KEY = os.getenv("ANTHROPIC_API_KEY")
 
 
 class PromptAIRes(TypedDict):
@@ -17,7 +18,8 @@ class PromptAIRes(TypedDict):
 
 def prompt_ai(ctx: str) -> PromptAIRes:
     is_correct = get_ai_response(
-        "Only output 'true' or 'false' on correctness of the git diff.", ctx
+        "Only output 'true' or 'false' on correctness of the git diff. Do not return anything else except the string true or false and do not provide an explanation",
+        ctx,
     )
     if is_correct is None:
         raise Exception("unable to generate reponse from llm for is_correct")
@@ -42,14 +44,14 @@ def get_ai_response(output_prompt: str, ctx: str):
 # Identity
 
 You are trying to validate if a code diff fixes the bug. You will be provided the bug description
-which includes the PR and related issues from Github and code diff
+which includes the PR and related issues from Github, code diff, method trace, code coverage, and files (after the patch is applied).
 Use the bug description (PR and Issues) as the requirements for the fix.
 
 # Instruction
 
 * The bug is specified in the # Description section with links to the GitHub PR and Issues
 * The description section should be the source of truth and provide the requirements for the fix
-* Use the description and code diff separated by markdown headers
+* Use the description, code diff, method trace, code coverage, and files (after the patched is applied) separated by markdown headers
 * Determine if the code diff correctly or incorrectly fixes the bug
 * {output_format}
     """
@@ -72,6 +74,6 @@ Use the bug description (PR and Issues) as the requirements for the fix.
 
 def initAIClient() -> OpenAI:
     return OpenAI(
-        api_key="ANTHROPIC_API_KEY",  # Your Anthropic API key
+        api_key=KEY,  # Your Anthropic API key
         base_url="https://api.anthropic.com/v1/",  # Anthropic's API endpoint)
     )
